@@ -1,0 +1,1 @@
+The following application will be used to safely encrypt the uploaded files using the password provided by the user.
