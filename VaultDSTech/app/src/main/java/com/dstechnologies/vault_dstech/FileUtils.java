@@ -31,7 +31,7 @@ public class FileUtils {
         }
         return null;
         }
-/*
+
         public static byte[] getFileData(String path ){
             File file = new File(path);
             byte[] fileDataArray = new byte[(int) file.length()];
@@ -42,5 +42,5 @@ public class FileUtils {
 
         return null;
     }
-*/
+
     }

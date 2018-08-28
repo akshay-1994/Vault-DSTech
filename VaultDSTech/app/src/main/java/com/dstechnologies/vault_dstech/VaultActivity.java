@@ -3,8 +3,10 @@ package com.dstechnologies.vault_dstech;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -18,9 +20,18 @@ import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 
+import javax.crypto.SecretKey;
 import javax.xml.transform.Result;
 
 import static com.dstechnologies.vault_dstech.R.color.colorAccent;
@@ -33,6 +44,8 @@ public class VaultActivity extends AppCompatActivity {
     EditText userKey;
     TextView errorMessage;
     Button submit;
+    Button decrypt;
+    SecretKey finalEncryptionKey;
     @SuppressLint("ResourceAsColor")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +57,7 @@ public class VaultActivity extends AppCompatActivity {
         userKey = findViewById(R.id.key_user);
         errorMessage = findViewById(R.id.error_msg);
         submit = findViewById(R.id.submit);
-
+        decrypt = findViewById(R.id.decrypt);
         // when user browses and selects a file to encrypt
         browse.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -54,7 +67,7 @@ public class VaultActivity extends AppCompatActivity {
         });
 
         // when user enters the secret key to encrypt the selected file
-        String partialKeyToEncrypt=userKey.getText().toString();
+        final String partialKeyToEncrypt=userKey.getText().toString();
 
         // if key length is less than the minimum length prescribed
         if (partialKeyToEncrypt.length()<Integer.valueOf(getString(R.string.size_key_default))){
@@ -64,11 +77,55 @@ public class VaultActivity extends AppCompatActivity {
 
         // when user taps on submit button and process of encryption commences.
         submit.setOnClickListener(new View.OnClickListener() {
+            @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
             @Override
             public void onClick(View v) {
                 if(pathToFile!=null) {
                     File file = new File(pathToFile.getText().toString());
+                    try {
+                        ////
+                        // Encrypting the file , using Standard Encryption class
+                        ////
+
+                        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(file));
+
+                        // Secure calculation of AES encryption key
+
+                        /*
+                        If your app needs additional encryption, a recommended approach is to require a passphase or PIN to access your application.
+                        This passphrase could be fed into PBKDF2 to generate the encryption key.
+                       (PBKDF2 is a commonly used algorithm for deriving key material from a passphrase, using a technique known as “key stretching”.)
+                        Android provides an implementation of this algorithm inside SecretKeyFactory as PBKDF2WithHmacSHA1:
+                         */
+                        finalEncryptionKey = StandardEncryption.generateKey(partialKeyToEncrypt.toCharArray(),StandardEncryption.generateSalt().toString().getBytes());
+
+                        byte[] fileDataBytes = StandardEncryption.encodeFile(finalEncryptionKey,FileUtils.getFileData(pathToFile.getText().toString()));
+                        bufferedOutputStream.write(fileDataBytes);
+                        bufferedOutputStream.flush();
+                        bufferedOutputStream.close();
+
+
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (NoSuchAlgorithmException e) {
+                        e.printStackTrace();
+                    } catch (InvalidKeySpecException e) {
+                        e.printStackTrace();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
+            }
+        });
+
+        decrypt.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                /////
+                // Decrypting the file using same key provided by the user
+                /////
+
+                decodeFile();
             }
         });
 
@@ -110,25 +167,37 @@ public class VaultActivity extends AppCompatActivity {
 
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_vault, menu);
-        return true;
+    public void decodeFile(){
+        try{
+            byte[] decodedFileData = StandardEncryption.decodeFile(finalEncryptionKey,readFile());
+            if(decodedFileData!=null) {
+                Toast.makeText(this, "Your file has been decoded!", Toast.LENGTH_LONG).show();
+            }
+
+        }catch(Exception ex){
+            ex.printStackTrace();
+        }
     }
 
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+    public byte[] readFile(){
+        byte[] fileContents = null;
+        File file = new File(pathToFile.getText().toString());
+        int size = (int) file.length();
+        fileContents = new byte[size];
+        try{
+            BufferedInputStream bufferedInputStream =  new BufferedInputStream(new FileInputStream(file));
+            try{
+                bufferedInputStream.read(fileContents);
+                bufferedInputStream.close();
+            }catch (IOException e){
+                e.printStackTrace();
+            }
+        }catch (Exception ex){
+            ex.printStackTrace();
         }
 
-        return super.onOptionsItemSelected(item);
+        return fileContents;
     }
+
+
 }
